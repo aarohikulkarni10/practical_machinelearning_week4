@@ -1,0 +1,155 @@
+---
+title: "Practical Machine Learning Week 4 PGA"
+author: "Aarohi Kulkarni"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.<br> The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set
+
+## Aim
+### Data from accelerometers on the belt, forearm, arm, and dumbbell of 6 participants and quantify how much work they do will be used. We will prediction model to predict 20 different test cases.
+
+
+
+## Preprocessing of data
+```{r preprocessing,echo=TRUE,warning=FALSE}
+# Loading all the required libraries
+library(ggplot2)
+library(lattice)
+library(caret)
+library(kernlab)
+library(rattle)
+library(corrplot)
+set.seed(12)  #for the purpose of reproducibility
+```
+
+## Loading the data
+The two training and testing csv files can be directly downloaded from the
+source and then read into data frames.
+```{r loading,echo=TRUE,cache=TRUE}
+train_csv <- read.csv("./pml-training.csv")
+test_csv  <- read.csv("./pml-testing.csv")
+dim(train_csv)
+dim(test_csv)
+```
+As can be seen above :  
+1. Training data has dimensions 19622 X 160. <br> 
+2. Testing data has dimensions 20 X 160.  <br>
+3. The first dimension is the number of observations.<br>
+
+## Cleaning the data
+We start by removing the NA variables.
+```{r cleaning1,echo=TRUE,cache=TRUE}
+# removing the NA columns
+train_csv <- train_csv[,colMeans(is.na(train_csv))< .9]
+# observe the head of the data, the
+# first seven cols are just metadata and hence are irrelevant to any output
+train_csv <- train_csv[,-c(1:7)]
+```
+
+
+Variance=0 means that all values within the set of numbers are identical. Hence we can safely remove these values too.
+```{r cleaning2,echo=TRUE,cache=TRUE}
+nvz_check <- nearZeroVar(train_csv)
+train_csv <- train_csv[,-nvz_check]
+dim(train_csv)
+```
+
+Performing a standard split of the data-set into training and
+validation sets. We use training set for training our models and the validation set of testing purposes.
+
+```{r splitting,echo=TRUE,cache=TRUE}
+factor <- createDataPartition(y=train_csv$classe,p=0.7,list=F)
+train_data <- train_csv[factor,]
+valid_data <- train_csv[-factor,]
+```
+
+# Creating and Testing Models
+
+```{r setup1,echo=TRUE,cache=TRUE}
+# trainControl command controls the computational nuances of the
+# train function.We use the cross validation method here and set
+# the number of iterations to 3 and don't print the training log
+control <- trainControl(method="cv", number=3, verboseIter=F)
+```
+
+## Methodology
+Train function is used which sets up a grid of tuning parameters for number of classification and regression routines, fits each model and calculates a re-sampling based performance measure.  
+We also use the prefict function which predicts the values based on the input data.
+
+## Decision Tree
+Creating Model:
+```{r dtmodel1,echo=TRUE, cache = TRUE}
+model_trees <- train(classe~., data=train_data, method="rpart", trControl = control, tuneLength = 5)
+fancyRpartPlot(model_trees$finalModel)
+```
+Making Prediction:
+```{r dtmodel2,echo=TRUE, cache = TRUE}
+pred_trees <- predict(model_trees, valid_data)
+matrix_trees <- confusionMatrix(pred_trees, factor(valid_data$classe))
+matrix_trees
+```
+
+## Random Forest Classifier
+```{r rfmodel,echo=TRUE,cache=TRUE}
+rf_model <- train(classe~., data=train_data, method="rf", trControl = control, tuneLength = 5)
+rf_prediction <- predict(rf_model, valid_data)
+matrix_rf <- confusionMatrix(rf_prediction, factor(valid_data$classe))
+matrix_rf
+```
+
+## Gradient Boosted Trees Classifier
+```{r gbt,echo=TRUE,cache=TRUE}
+gbt_model <- train(classe~., data=train_data, method="gbm", trControl = control, tuneLength = 5, verbose = F)
+gbt_prediction <- predict(gbt_model, valid_data)
+matrix_gbt <- confusionMatrix(gbt_prediction, factor(valid_data$classe))
+matrix_gbt
+```
+
+## Support Vector Machine Classifier
+
+```{r svm,echo=TRUE,cache=TRUE}
+svm_model <- train(classe~., data=train_data, method="svmLinear", trControl = control, tuneLength = 5, verbose = F)
+svm_prediction <- predict(svm_model, valid_data)
+matrix_svm <- confusionMatrix(svm_prediction, factor(valid_data$classe))
+matrix_svm
+```
+
+## Prediction using the Test Dataset
+
+### We use the random forest classifier here because it provides a **higher accuracy**
+###through cross validation and handles the missing values and maintains the accuracy for a large
+###proportion of data.
+
+```{r prediction1,echo=TRUE,cache=TRUE}
+final <- predict(rf_model,test_csv)
+print(final)
+```
+
+## Appendix : Figures
+### 1.Correlation Matrix of Training Set Variables  
+```{r ap1, cache = T}
+corr <- cor(train_data[, -length(names(train_data))])
+corrplot(corr, method="color")
+```
+### 2.Plotting the models
+
+**Decision Tree**
+```{r ap2,echo=TRUE,cache = TRUE}
+plot(model_trees)
+```
+
+**Random Forest**
+```{r ap3,echo=TRUE,cache = TRUE}
+plot(rf_model)
+```
+
+**Gradient Boosted Tree**
+```{r ap4,echo=TRUE,cache = TRUE}
+plot(gbt_model)
+```
